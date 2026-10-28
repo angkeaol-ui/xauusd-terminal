@@ -2,10 +2,32 @@ import requests
 from app.config import settings
 
 
-def summarize_market_with_gemini(signal_data: dict, price: float, timeframe: str) -> str:
+def chat_with_gemini(prompt: str) -> str:
     if not settings.GEMINI_API_KEY:
-        return signal_data.get("ai_summary", "Market summary unavailable")
+        return "AI analysis is unavailable because no Gemini API key is configured."
 
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.GEMINI_MODEL}:generateContent?key={settings.GEMINI_API_KEY}"
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+
+    try:
+        response = requests.post(url, json=payload, timeout=20)
+        response.raise_for_status()
+        result = response.json()
+
+        candidates = result.get("candidates", [])
+        if not candidates:
+            return "AI analysis is unavailable right now."
+
+        text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+        if text:
+            return text.strip()
+
+        return "AI analysis is unavailable right now."
+    except Exception:
+        return "AI analysis is unavailable right now."
+
+
+def summarize_market_with_gemini(signal_data: dict, price: float, timeframe: str) -> str:
     prompt = f"""
     You are a market analyst reviewing XAUUSD.
     Use these values:
@@ -28,23 +50,4 @@ def summarize_market_with_gemini(signal_data: dict, price: float, timeframe: str
     Keep it factual, not promotional.
     Do not claim guaranteed profits.
     """
-
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.GEMINI_MODEL}:generateContent?key={settings.GEMINI_API_KEY}"
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
-
-    try:
-        response = requests.post(url, json=payload, timeout=20)
-        response.raise_for_status()
-        result = response.json()
-
-        candidates = result.get("candidates", [])
-        if not candidates:
-            return signal_data.get("ai_summary", "Market summary unavailable")
-
-        text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-        if text:
-            return text.strip()
-
-        return signal_data.get("ai_summary", "Market summary unavailable")
-    except Exception:
-        return signal_data.get("ai_summary", "Market summary unavailable")
+    return chat_with_gemini(prompt)
